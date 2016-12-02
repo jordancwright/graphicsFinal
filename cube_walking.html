@@ -439,7 +439,18 @@ XXXXXXXXXXXXXXXXXXX
             gl.uniformMatrix4fv(matrixMitLocation, false, m4.transpose(xformMinv));
             drawObject(drawable.object);
         }
+		
+		
+		gl.disable( gl.DEPTH_TEST );
 
+        gl.uniformMatrix4fv(matrixPLocation,   false, m4.identity());
+        gl.uniformMatrix4fv(matrixVLocation,   false, m4.identity());
+        gl.uniformMatrix4fv(matrixVitLocation, false, m4.identity());
+		
+		//Put crosshair here
+		
+		gl.enable( gl.DEPTH_TEST );
+		
         requestAnimationFrame(update);
     }
 
