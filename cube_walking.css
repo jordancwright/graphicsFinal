@@ -7,6 +7,16 @@ canvas {
     width: 100vw;
     height: 100vh;
     display: block;
+    position: absolute;
+    z-index: 1;
+}
+#otherCanvas {
+    background-color: transparent;
+    width: 50vw;
+    height: 50vw;
+    display: block;
+    position: absolute;
+    z-index: 7;
 }
 div#ui {
     position: fixed;
