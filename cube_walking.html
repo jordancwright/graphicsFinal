@@ -26,7 +26,6 @@ XXXXXXXXXXXXXXXXXXX
 
 <body>
 <canvas id="c"></canvas>
-<canvas id="otherCanvas"></canvas>
 <div id="ui"><table>
     <tr><td>Use arrow keys to move.</td></tr>
     <tr><td>fps: <span id="fps">-----</span></td></tr>
@@ -37,24 +36,26 @@ XXXXXXXXXXXXXXXXXXX
 
 
 <script type="notjs" id="2d-vertex-shader">
-    attribute vec2 a_position;
-    uniform mat3 u_matrix;
+    // an attribute will receive data from a buffer
+    attribute vec4 a_position;
 
-    void main()
-    {
-        vec2 xy = (u_matrix * vec3(a_position, 1)).xy;
-        gl_Position = vec4(xy, 0, 1);
+    void main() {
+        // convert the position from pixels to 0.0 to 1.0
+        gl_Position = a_position;
     }
+
 </script>
 
+
+
 <script type="notjs" id="2d-fragment-shader">
+    // fragment shaders don't have a default precision so we need
+    // to pick one. mediump is a good default. It means "medium precision"
     precision mediump float;
 
-    uniform vec4 u_color;
-
-    void main()
-    {
-        gl_FragColor = u_color;
+    void main() {
+    // gl_FragColor is a special variable a fragment shader
+        gl_FragColor = vec4(0, 1, 0, 1); // return redish-purple
     }
 </script>
 
@@ -138,9 +139,15 @@ XXXXXXXXXXXXXXXXXXX
     }
 </script>
 
+
+
+
 <script>
     const MAXLIGHTS = 8;
     const MAPLOAD = "map1";
+
+
+
 
 
     //////////////////////////////
@@ -163,11 +170,7 @@ XXXXXXXXXXXXXXXXXXX
     var program = createProgram(gl, vertShader, fragShader);
     gl.useProgram(program);
 
-    var TwoDVertShaderSrc = document.getElementById("2d-vertex-shader");
-    var TwoDFragShaderSrc = document.getElementById("2d-fragment-shader");
-    //var TwoDVertShader = createShader(gl, gl.VERTEX_SHADER, TwoDVertShaderSrc);
-    //var TwoDFragShader = createShader(gl, gl.FRAGMENT_SHADER, TwoDFragShaderSrc);
-    //var TwoDProgram = createProgram2d(gl, TwoDVertShader, TwoDFragShader);
+
 
 
     var posLocation   = gl.getAttribLocation(program, "a_pos_local");
@@ -192,6 +195,55 @@ XXXXXXXXXXXXXXXXXXX
     gl.enableVertexAttribArray(posLocation);
     gl.enableVertexAttribArray(normLocation);
     gl.enableVertexAttribArray(colorLocation);
+
+    var TwoDVertShaderSrc = document.getElementById("2d-vertex-shader").innerHTML;
+    var TwoDFragShaderSrc = document.getElementById("2d-fragment-shader").innerHTML;
+    var TwoDVertShader = createShader(gl, gl.VERTEX_SHADER, TwoDVertShaderSrc);
+    var TwoDFragShader = createShader(gl, gl.FRAGMENT_SHADER, TwoDFragShaderSrc);
+    var TwoDProgram = createProgram2d(gl, TwoDVertShader, TwoDFragShader);
+
+
+    gl.useProgram(TwoDProgram);
+    var positionAttributeLocation2d = gl.getAttribLocation(TwoDProgram, "a_position");
+
+    gl.enableVertexAttribArray(positionAttributeLocation2d);
+
+
+    var positionBuffer2d = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer2d);
+
+    var positions2d = [
+        //top
+    -0.007, 0.1,
+    -0.007, 0.03,
+    0.007, 0.03,
+    -0.007, 0.1,
+    0.007, 0.1,
+    0.007, 0.03,
+    //left
+    -0.1, -0.007,
+    -0.03, -0.007,
+    -0.03, 0.007,
+    -0.1, -0.007,
+    -0.1, 0.007,
+    -0.03, 0.007,
+    //right
+    0.1, -0.007,
+    0.03, -0.007,
+    0.03, 0.007,
+    0.1, -0.007,
+    0.1, 0.007,
+    0.03, 0.007,
+    //bottom
+    -0.007, -0.1,
+    -0.007, -0.03,
+    0.007, -0.03,
+    -0.007, -0.1,
+    0.007, -0.1,
+    0.007, -0.03,
+    ];
+
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions2d), gl.STATIC_DRAW);
 
 
     ///////////////////////////
@@ -389,6 +441,8 @@ XXXXXXXXXXXXXXXXXXX
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
+
+        gl.useProgram(program);
         var xformP    = m4.perspective(player.fov * Math.PI / 180.0, gl.canvas.width / gl.canvas.height, player.clip[0], player.clip[1]);
         // note: lookAt returns the inverse of the view xform matrix, so we need to invert
         var xformVinv = m4.lookAt(player.loc, [player.loc[0]+Math.sin(player.dir), player.loc[1], player.loc[2]+Math.cos(player.dir)], [0,1,0]);
@@ -428,7 +482,7 @@ XXXXXXXXXXXXXXXXXXX
             gl.uniformMatrix4fv(matrixMitLocation, false, m4.transpose(xformMinv));
             drawObject(objectCeiling);
         }
-		
+
         // draw *all* drawable objects (not terribly efficient!)
         for(i = 0; i < drawables.length; i++) {
             var drawable = drawables[i];
@@ -439,56 +493,32 @@ XXXXXXXXXXXXXXXXXXX
             gl.uniformMatrix4fv(matrixMitLocation, false, m4.transpose(xformMinv));
             drawObject(drawable.object);
         }
-		
+
 		//crosshair starts here
 		gl.disable( gl.DEPTH_TEST );
-		
-        //gl.uniformMatrix4fv(matrixPLocation,   false, m4.identity());
-        //gl.uniformMatrix4fv(matrixVLocation,   false, m4.identity());
-        //gl.uniformMatrix4fv(matrixVitLocation, false, m4.identity());
-		
-		//Put crosshair here
-		var positions2D = [
-			//top
-		  -0.007, 0.1, 1,
-		  -0.007, 0.03, 1,
-		  0.007, 0.03, 1,
-		  -0.007, 0.1, 1,
-		  0.007, 0.1, 1,
-		  0.007, 0.03, 1,
-		  //left
-		  -0.1, -0.007,1,
-		  -0.03, -0.007,1,
-		  -0.03, 0.007, 1,
-		  -0.1, -0.007, 1,
-		  -0.1, 0.007, 1,
-		  -0.03, 0.007, 1,
-		  //right
-		  0.1, -0.007, 1,
-		  0.03, -0.007, 1,
-		  0.03, 0.007, 1,
-		  0.1, -0.007, 1,
-		  0.1, 0.007, 1,
-		  0.03, 0.007, 1,
-		  //bottom
-		  -0.007, -0.1, 1,
-		  -0.007, -0.03, 1,
-		  0.007, -0.03, 1,
-		  -0.007, -0.1, 1,
-		  0.007, -0.1, 1,
-		  0.007, -0.03, 1,
-		];
-		var xformM = m4.identity();
-        var xformMinv = m4.identity(); // ignore scaling and translation
-        //gl.uniformMatrix4fv(matrixMLocation,   false, xformM);
-        //gl.uniformMatrix4fv(matrixMitLocation, false, m4.identity());
-		
-		
-		
-		drawObject(generateQuadObject([-5,0,-5], [1,1,1,1], [1,1,1], [-.5,-.5,.5], [.5,.5,.5], 1));
-		
+        gl.disable( gl.CULL_FACE );
+
+
+        gl.useProgram(TwoDProgram);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer2d);
+
+        var size = 2;          // 2 components per iteration
+        var type = gl.FLOAT;   // the data is 32bit floats
+        var normalize = false; // don't normalize the data
+        var stride = 0;        // 0 = move forward size * sizeof(type) each iteration to get the next position
+        var offset = 0;        // start at the beginning of the buffer
+        gl.vertexAttribPointer(positionAttributeLocation2d, size, type, normalize, stride, offset);
+
+        var primitiveType = gl.TRIANGLES;
+        var offset = 0;
+        var count = 24;
+        gl.drawArrays(primitiveType, offset, count);
+
+
 		gl.enable( gl.DEPTH_TEST );
-		
+        gl.enable( gl.CULL_FACE );
+
         requestAnimationFrame(update);
     }
 
