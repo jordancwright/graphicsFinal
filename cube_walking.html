@@ -428,7 +428,7 @@ XXXXXXXXXXXXXXXXXXX
             gl.uniformMatrix4fv(matrixMitLocation, false, m4.transpose(xformMinv));
             drawObject(objectCeiling);
         }
-
+		
         // draw *all* drawable objects (not terribly efficient!)
         for(i = 0; i < drawables.length; i++) {
             var drawable = drawables[i];
@@ -440,14 +440,52 @@ XXXXXXXXXXXXXXXXXXX
             drawObject(drawable.object);
         }
 		
-		
+		//crosshair starts here
 		gl.disable( gl.DEPTH_TEST );
-
-        gl.uniformMatrix4fv(matrixPLocation,   false, m4.identity());
-        gl.uniformMatrix4fv(matrixVLocation,   false, m4.identity());
-        gl.uniformMatrix4fv(matrixVitLocation, false, m4.identity());
+		
+        //gl.uniformMatrix4fv(matrixPLocation,   false, m4.identity());
+        //gl.uniformMatrix4fv(matrixVLocation,   false, m4.identity());
+        //gl.uniformMatrix4fv(matrixVitLocation, false, m4.identity());
 		
 		//Put crosshair here
+		var positions2D = [
+			//top
+		  -0.007, 0.1, 1,
+		  -0.007, 0.03, 1,
+		  0.007, 0.03, 1,
+		  -0.007, 0.1, 1,
+		  0.007, 0.1, 1,
+		  0.007, 0.03, 1,
+		  //left
+		  -0.1, -0.007,1,
+		  -0.03, -0.007,1,
+		  -0.03, 0.007, 1,
+		  -0.1, -0.007, 1,
+		  -0.1, 0.007, 1,
+		  -0.03, 0.007, 1,
+		  //right
+		  0.1, -0.007, 1,
+		  0.03, -0.007, 1,
+		  0.03, 0.007, 1,
+		  0.1, -0.007, 1,
+		  0.1, 0.007, 1,
+		  0.03, 0.007, 1,
+		  //bottom
+		  -0.007, -0.1, 1,
+		  -0.007, -0.03, 1,
+		  0.007, -0.03, 1,
+		  -0.007, -0.1, 1,
+		  0.007, -0.1, 1,
+		  0.007, -0.03, 1,
+		];
+		var xformM = m4.identity();
+        var xformMinv = m4.identity(); // ignore scaling and translation
+        //gl.uniformMatrix4fv(matrixMLocation,   false, xformM);
+        //gl.uniformMatrix4fv(matrixMitLocation, false, m4.identity());
+		
+		
+		
+		drawObject(generateQuadObject([-5,0,-5], [1,1,1,1], [1,1,1], [-.5,-.5,.5], [.5,.5,.5], 1));
 		
 		gl.enable( gl.DEPTH_TEST );
 		
