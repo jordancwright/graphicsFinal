@@ -137,39 +137,13 @@ XXXXXXXXXXXXXXXXXXX
 
 		int nonPhoto = 1;
 		
+		float v;
         vec4 color = vec4(v_color.rgb * (kt + ka + kd), v_color.a);
 		if (nonPhoto == 1) {
-			for (int i = 0; i < 3; i++) {
-				if (color[i] < 0.05) {
-					color[i] = 0.0;
-				} else if (color[i] < 0.15) {
-					color[i] = 0.1;
-				} else if (color[i] < 0.25) {
-					color[i] = 0.2;
-				} else if (color[i] < 0.35) {
-					color[i] = 0.3;
-				} else if (color[i] < 0.45) {
-					color[i] = 0.4;
-				} else if (color[i] < 0.55) {
-					color[i] = 0.5;
-				} else if (color[i] < 0.65) {
-					color[i] = 0.6;
-				} else if (color[i] < 0.75) {
-					color[i] = 0.7;
-				} else if (color[i] < 0.85) {
-					color[i] = 0.8;
-				} else if (color[i] < 0.95) {
-					color[i] = 0.9;
-				} else {
-					color[i] = 1.0;
-				}
-			}
-			/*if(color[1] < 0.5) {
-				gl_FragColor = vec4(color[0]+0.25, color[1], color[2], color[3]);
-			}
-			else {
-				gl_FragColor = vec4(color[0], color[1], color[2], color[3]);
-			}*/
+			v = sqrt(color[0] + color[1] + color[2]);
+			v = pow(floor(v*5.0)/5.0, 2.0);
+			color = normalize(color) * v;
+			color[3] = 1.0;
 		}
 		gl_FragColor = color;
     }
@@ -493,7 +467,7 @@ XXXXXXXXXXXXXXXXXXX
             gl.uniform4fv(lightColLocations[i], lights[i].color);
         }
 
-        gl.uniform4f(lightAmbLocation, 1.0, 1.0, 1.0, 0.02);
+        gl.uniform4f(lightAmbLocation, 1.0, 1.0, 1.0, 0.05);
 
         var torchNew = torch.range[0] + (torch.range[1] - torch.range[0]) * Math.random();
         torch.val = torch.val * torch.blend + torchNew * (1.0 - torch.blend);
@@ -692,11 +666,6 @@ XXXXXXXXXXXXXXXXXXX
             colorBuffer: colorBuffer,
             length: 6,
         };
-    }
-
-    function generateCrosshair()
-    {
-
     }
 
     function generateCylinderObject(count, color, smooth, r, y0, y1)
