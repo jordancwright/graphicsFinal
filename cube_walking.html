@@ -149,12 +149,6 @@ XXXXXXXXXXXXXXXXXXX
 		
 		float v;
         vec4 color = vec4(v_color.rgb * (kt + ka + kd), v_color.a);
-		if (nonPhoto == 1) {
-			v = sqrt(color[0] + color[1] + color[2]);
-			v = pow(floor(v*5.0)/5.0, 2.0);
-			color = normalize(color) * v;
-			color[3] = 1.0;
-		}
 		
 		if(fog == 1) {
 			float radius = 20.0;
@@ -182,6 +176,13 @@ XXXXXXXXXXXXXXXXXXX
 					}
 				}
 			}
+		}
+		
+		if (nonPhoto == 1) {
+			v = sqrt(color[0] + color[1] + color[2]);
+			v = pow(floor(v*5.0)/5.0, 2.0);
+			color = normalize(color) * v;
+			color[3] = 1.0;
 		}
 		
 		gl_FragColor = color;
