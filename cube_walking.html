@@ -29,6 +29,7 @@ XXXXXXXXXXXXXXXXXXX
 <div id="ui"><table>
     <tr><td>Use arrow keys to move.</td></tr>
     <tr><td>fps: <span id="fps">-----</span></td></tr>
+    <tr><td><label for="chk">Enable Crosshair</label></td><td><input type="checkbox" id="enablecrosshair" name="chk"></td></tr>
 </table></div>
 </body>
 
@@ -136,7 +137,7 @@ XXXXXXXXXXXXXXXXXXX
         kt = u_light_torch.rgb * (ndotl * u_light_torch.a / pow(vdist, 1.1));
 
 		int nonPhoto = 1;
-		
+
 		float v;
         vec4 color = vec4(v_color.rgb * (kt + ka + kd), v_color.a);
 		if (nonPhoto == 1) {
@@ -145,33 +146,130 @@ XXXXXXXXXXXXXXXXXXX
 			color = normalize(color) * v;
 			color[3] = 1.0;
 		}
-		gl_FragColor = color;
+		gl_FragColor = vec4(color.rgb, vdist/100.0);
     }
 </script>
 
+<script type="notjs" id="depth-blur-fragment-shader">
+
+    precision mediump float;
+
+    varying vec2 v_texcoord;
+    uniform sampler2D uSampler;
+    uniform sampler2D uSampler2;
+
+    vec2 uv2pix(vec2 uv) {
+        return uv * 2048.0;
+    }
+
+    vec2 pix2uv(vec2 pix) {
+        return pix / 2048.0;
+    }
+
+    void main(void) {
+        float infocusdist = 0.1;  //5 walls space
+        float infocuspower = 15.0; // larger number tightens what's in focus
+
+        vec4 textureColor1 = texture2D(uSampler, pix2uv(uv2pix(v_texcoord) + vec2(-2,-2)));
+        vec4 textureColor2 = texture2D(uSampler, pix2uv(uv2pix(v_texcoord) + vec2(-2,0)));
+        vec4 textureColor3 = texture2D(uSampler, pix2uv(uv2pix(v_texcoord) + vec2(-2,2)));
+        vec4 textureColor4 = texture2D(uSampler, pix2uv(uv2pix(v_texcoord) + vec2(0,-2)));
+        vec4 textureColor5 = texture2D(uSampler, pix2uv(uv2pix(v_texcoord) + vec2(0,0)));
+        vec4 textureColor6 = texture2D(uSampler, pix2uv(uv2pix(v_texcoord) + vec2(0,2)));
+        vec4 textureColor7 = texture2D(uSampler, pix2uv(uv2pix(v_texcoord) + vec2(2,-2)));
+        vec4 textureColor8 = texture2D(uSampler, pix2uv(uv2pix(v_texcoord) + vec2(2,0)));
+        vec4 textureColor9 = texture2D(uSampler, pix2uv(uv2pix(v_texcoord) + vec2(2,2)));
+
+        vec4 textureColor = (textureColor1 + textureColor2 + textureColor3 + textureColor4 +textureColor5 + textureColor6 + textureColor7 + textureColor8 + textureColor9)/9.0;
+
+        float distd = textureColor5.a;
+        float blend = pow(1.0 - clamp(abs(infocusdist - distd), 0.0, 1.0), infocuspower);     
+
+        gl_FragColor = vec4(textureColor5.rgb * blend + textureColor.rgb * (1.0-blend), 1.0);
+    }
+
+</script>
+
+<script type="notjs" id="depth-blur-vertex-shader">
+    // an attribute will receive data from a buffer
+    //attribute vec4 a_position;
+    attribute vec2 a_position;
+
+    uniform vec2 u_resolution;
+
+    varying vec2 v_texcoord;
 
 
+
+    void main() {
+        // convert the position from pixels to 0.0 to 1.0
+        //v_texcoord = a_position.xy;
+
+        // convert the position from pixels to 0.0 to 1.0
+
+        vec2 zeroToOne = a_position / u_resolution;
+        // convert from 0->1 to 0->2
+        vec2 zeroToTwo = zeroToOne * 2.0;
+        // convert from 0->2 to -1->+1 (clipspace)
+        vec2 clipSpace = zeroToTwo - 1.0;
+
+        v_texcoord = a_position * u_resolution/2048.0;
+
+        gl_Position = vec4(a_position * 2.0 - 1.0, 0, 1);
+    }
+
+</script>
 
 <script>
     const MAXLIGHTS = 8;
     const MAPLOAD = "map1";
-
-
-
-
 
     //////////////////////////////
     // set up webgl
 
     var canvas = document.getElementById("c");
     var gl = canvas.getContext("webgl", {antialias:true});
+    var depthTextureExt = gl.getExtension("WEBKIT_WEBGL_depth_texture"); // Or browser-appropriate prefix
+    if(!depthTextureExt) { throw new Error('extension compile error'); }
 
     gl.enable( gl.DEPTH_TEST );
     gl.depthFunc( gl.LESS );
     gl.enable( gl.CULL_FACE );
     gl.enable( gl.BLEND );
     gl.blendEquation( gl.FUNC_ADD );
-    gl.blendFunc( gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA );
+    gl.blendFunc( gl.ONE, gl.ZERO );
+
+//////////DEPTH BLUR/////////
+    var depthBlurFrameBuffer = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, depthBlurFrameBuffer);
+    depthBlurFrameBuffer.width = 2048;
+    depthBlurFrameBuffer.height = 2048;
+
+    var depthBlurTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, depthBlurTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    //gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, depthBlurFrameBuffer.width, depthBlurFrameBuffer.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+    var depthTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, depthTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT, depthBlurFrameBuffer.width, depthBlurFrameBuffer.height, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_SHORT, null);
+
+    var renderbuffer = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, renderbuffer);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, depthBlurFrameBuffer.width, depthBlurFrameBuffer.height);
+
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, depthBlurTexture, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depthTexture, 0);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, renderbuffer);
+
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+//////////END DEPTH BLUR/////////
 
     var vertShaderSrc = document.getElementById("vertex-shader").text.replace(/MAXLIGHTS/g,MAXLIGHTS);
     var fragShaderSrc = document.getElementById("fragment-shader").text.replace(/MAXLIGHTS/g,MAXLIGHTS);
@@ -180,8 +278,13 @@ XXXXXXXXXXXXXXXXXXX
     var program = createProgram(gl, vertShader, fragShader);
     gl.useProgram(program);
 
-
-
+//////////DEPTH BLUR/////////
+    var depthVertexShaderSrc = document.getElementById("depth-blur-vertex-shader").text;
+    var depthFragShaderSrc = document.getElementById("depth-blur-fragment-shader").text;
+    var depthFragShader = createShader(gl, gl.FRAGMENT_SHADER, depthFragShaderSrc);
+    var depthVertexShader = createShader(gl, gl.VERTEX_SHADER, depthVertexShaderSrc);
+    var shaderProgram = createProgram(gl, depthVertexShader, depthFragShader);
+//////////END DEPTH BLUR/////////
 
     var posLocation   = gl.getAttribLocation(program, "a_pos_local");
     var normLocation  = gl.getAttribLocation(program, "a_norm_local");
@@ -224,41 +327,62 @@ XXXXXXXXXXXXXXXXXXX
 
     var positions2d = [
         //top
-    -0.007, 0.1,
-    -0.007, 0.03,
-    0.007, 0.03,
-    -0.007, 0.1,
-    0.007, 0.1,
-    0.007, 0.03,
-    //left
-    -0.1, -0.007,
-    -0.03, -0.007,
-    -0.03, 0.007,
-    -0.1, -0.007,
-    -0.1, 0.007,
-    -0.03, 0.007,
-    //right
-    0.1, -0.007,
-    0.03, -0.007,
-    0.03, 0.007,
-    0.1, -0.007,
-    0.1, 0.007,
-    0.03, 0.007,
-    //bottom
-    -0.007, -0.1,
-    -0.007, -0.03,
-    0.007, -0.03,
-    -0.007, -0.1,
-    0.007, -0.1,
-    0.007, -0.03,
+        -0.007, 0.1,
+        -0.007, 0.03,
+        0.007, 0.03,
+        -0.007, 0.1,
+        0.007, 0.1,
+        0.007, 0.03,
+        //left
+        -0.1, -0.007,
+        -0.03, -0.007,
+        -0.03, 0.007,
+        -0.1, -0.007,
+        -0.1, 0.007,
+        -0.03, 0.007,
+        //right
+        0.1, -0.007,
+        0.03, -0.007,
+        0.03, 0.007,
+        0.1, -0.007,
+        0.1, 0.007,
+        0.03, 0.007,
+        //bottom
+        -0.007, -0.1,
+        -0.007, -0.03,
+        0.007, -0.03,
+        -0.007, -0.1,
+        0.007, -0.1,
+        0.007, -0.03,
     ];
 
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions2d), gl.STATIC_DRAW);
 
+//////////DEPTH BLUR/////////
+    gl.useProgram(shaderProgram);
+    var blurAttributeLocation = gl.getAttribLocation(shaderProgram, "a_position");
+    var resolutionUniformLocation = gl.getUniformLocation(shaderProgram, "u_resolution");
+
+    gl.enableVertexAttribArray(blurAttributeLocation);
+
+     var blurTexturePositions = [
+        0.0, 0.0,
+        0.0, 1.0,
+        1.0, 0.0,
+        1.0, 0.0,
+        1.0, 1.0,
+        0.0, 1.0
+    ];
+
+    var blurBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, blurBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(blurTexturePositions), gl.STATIC_DRAW);
+
+    // set the resolution
+//////////END DEPTH BLUR/////////
 
     ///////////////////////////
     // game info
-
     // game states
     var prevTime = 0;
     var frames = 0, prevFramesTime = 0;
@@ -275,7 +399,6 @@ XXXXXXXXXXXXXXXXXXX
     var player = { loc:[0,0,0], fwdSpeed:0, dir:0, dirSpeed:0, fov:60, clip:[0.01,100] };
     var torch = { val: 1.0, range:[0.2,1.5], color:[1.0,0.7,0.4], blend:0.9 };
 
-
     // drawable objects
     var objectWall    = generateCubeObject(1.0);
     var objectTree    = generateCylinderObject(8, [0.2,0.5,0.2,1.0], false, 0.2, -1.0, 0.8);
@@ -283,7 +406,6 @@ XXXXXXXXXXXXXXXXXXX
     var objectLight   = generateCylinderObject(8, [0.7,1.0,0.7,1.0], false, 0.2,  0.9, 1.0);
     var objectFloor   = generateQuadObject([0,0,0], [0.7,0.7,0.7,1.0], [1,0,0], [0,0,1], [0, 1,0], 1);
     var objectCeiling = generateQuadObject([0,0,0], [0.5,0.5,0.5,1.0], [-1,0,0], [0,0,1], [0,-1,0], 1);
-
 
     ///////////////////////////
     // map stuff
@@ -348,7 +470,6 @@ XXXXXXXXXXXXXXXXXXX
         }
     }
 
-
     ///////////////////////////////////////////
     // game update and render
 
@@ -356,6 +477,7 @@ XXXXXXXXXXXXXXXXXXX
 
     function update(currTime)
     {
+        var enabledcrosshair = document.getElementById("enablecrosshair").checked;        
         currTime *= 0.001;
         var deltaTime = Math.min(currTime - prevTime, 0.25);
         prevTime = currTime;
@@ -447,10 +569,15 @@ XXXXXXXXXXXXXXXXXXX
 
         // resize and redraw the canvas!!
         resize(canvas);
+
+//////////DEPTH BLUR/////////
+        gl.bindFramebuffer(gl.FRAMEBUFFER, depthBlurFrameBuffer);
+        gl.bindRenderbuffer(gl.RENDERBUFFER, renderbuffer);
+//////////END DEPTH BLUR/////////
+
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         gl.clearColor(0, 0, 0, 1);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
 
         gl.useProgram(program);
         var xformP    = m4.perspective(player.fov * Math.PI / 180.0, gl.canvas.width / gl.canvas.height, player.clip[0], player.clip[1]);
@@ -467,7 +594,8 @@ XXXXXXXXXXXXXXXXXXX
             gl.uniform4fv(lightColLocations[i], lights[i].color);
         }
 
-        gl.uniform4f(lightAmbLocation, 1.0, 1.0, 1.0, 0.05);
+//AMOUNT OF AMBIENT LIGHT
+        gl.uniform4f(lightAmbLocation, 1.0, 1.0, 1.0, 0.5);
 
         var torchNew = torch.range[0] + (torch.range[1] - torch.range[0]) * Math.random();
         torch.val = torch.val * torch.blend + torchNew * (1.0 - torch.blend);
@@ -504,27 +632,57 @@ XXXXXXXXXXXXXXXXXXX
             drawObject(drawable.object);
         }
 
-		//crosshair starts here
+//////////DEPTH BLUR/////////
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+
 		gl.disable( gl.DEPTH_TEST );
         gl.disable( gl.CULL_FACE );
+        gl.useProgram(shaderProgram);
+        gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, depthBlurTexture);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, depthTexture);
+        
+        //gl.bindTexture(gl.TEXTURE_2D, depthTexture);
 
+        gl.uniform1i(gl.getUniformLocation(shaderProgram,"uSampler"), 0);
+        gl.uniform1i(gl.getUniformLocation(shaderProgram,"uSampler2"), 1);
 
-        gl.useProgram(TwoDProgram);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer2d);
-
+        gl.bindBuffer(gl.ARRAY_BUFFER, blurBuffer);
         var size = 2;          // 2 components per iteration
         var type = gl.FLOAT;   // the data is 32bit floats
         var normalize = false; // don't normalize the data
         var stride = 0;        // 0 = move forward size * sizeof(type) each iteration to get the next position
         var offset = 0;        // start at the beginning of the buffer
-        gl.vertexAttribPointer(positionAttributeLocation2d, size, type, normalize, stride, offset);
+        gl.vertexAttribPointer(blurAttributeLocation, size, type, normalize, stride, offset);
 
-        var primitiveType = gl.TRIANGLES;
-        var offset = 0;
-        var count = 24;
-        gl.drawArrays(primitiveType, offset, count);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+//////////END DEPTH BLUR/////////
 
+		//crosshair starts here
+        if(enabledcrosshair){
+            gl.useProgram(TwoDProgram);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer2d);
+
+            var size = 2;          // 2 components per iteration
+            var type = gl.FLOAT;   // the data is 32bit floats
+            var normalize = false; // don't normalize the data
+            var stride = 0;        // 0 = move forward size * sizeof(type) each iteration to get the next position
+            var offset = 0;        // start at the beginning of the buffer
+            gl.vertexAttribPointer(positionAttributeLocation2d, size, type, normalize, stride, offset);
+
+            var primitiveType = gl.TRIANGLES;
+            var offset = 0;
+            var count = 24;
+            gl.drawArrays(primitiveType, offset, count);
+        }
 
 		gl.enable( gl.DEPTH_TEST );
         gl.enable( gl.CULL_FACE );
