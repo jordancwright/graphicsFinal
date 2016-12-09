@@ -104,6 +104,7 @@ XXXXXXXXXXXXXXXXXXX
     uniform vec4 u_light_color[MAXLIGHTS];  // light color (rgb) and brightness (alpha)
     uniform vec4 u_light_ambient;           // ambient color (rgb) and brightness (alpha)
     uniform vec4 u_light_torch;             // simulate player holding a torch
+	uniform vec3 u_player_loc;				// player position
 
     varying vec3 v_pos_world;   // vert position in world space
     varying vec3 v_pos_camera;  // vert position in camera space
@@ -114,6 +115,16 @@ XXXXXXXXXXXXXXXXXXX
     void main()
     {
         vec3 kd, ka, kt;
+		
+		int nonPhoto = 1;
+		int fog = 1;
+		
+		vec4 ambient = u_light_ambient;
+		if (nonPhoto == 1) {
+			ambient[3] = 0.05;
+		} else {
+			ambient[3] = 0.02;
+		}
 
         // accumulate diffuse lighting
         kd = vec3(0,0,0);
@@ -128,18 +139,45 @@ XXXXXXXXXXXXXXXXXXX
         }
 
         // compute ambient lighting
-        ka = u_light_ambient.rgb * u_light_ambient.a;
+        //ka = u_light_ambient.rgb * u_light_ambient.a;
+		ka = vec3(ambient[0], ambient[1], ambient[2]) * ambient[3];
 
         // simulate torch
         float vdist = length(v_pos_camera);                     // distance from fragment to camera
         vec3  vdir  = -v_pos_camera / vdist;                    // view direction (from fragment to camera)
         float ndotl = max(0.0, dot(v_norm_camera, vdir));       // fragment normal dot light (view) direction
         kt = u_light_torch.rgb * (ndotl * u_light_torch.a / pow(vdist, 1.1));
-
-		int nonPhoto = 1;
-
 		float v;
         vec4 color = vec4(v_color.rgb * (kt + ka + kd), v_color.a);
+		
+		if(fog == 1) {
+			float radius = 20.0;
+			float fogIntensity = 0.2;
+			vec3 fogCenter = vec3(10.0, 0.0, 5.0);
+			vec3 d = normalize(v_pos_world - u_player_loc); 
+			vec3 E = d * dot(fogCenter - u_player_loc, d) + u_player_loc;
+			float a = 1.0;
+			float b = dot(2.0 * d, u_player_loc - fogCenter);
+			float c = pow(length(u_player_loc - fogCenter), 2.0) - pow(radius, 2.0);
+			float determinant = pow(b, 2.0) - (4.0*a*c);
+			float fog = pow(1.0 - (length(E - fogCenter)/radius), 0.3);
+			float tPlus = (-b + sqrt(determinant)) / (2.0*a);
+			float tMinus = (-b - sqrt(determinant)) / (2.0*a);
+			for (int i = 0; i < 3; i++) {
+				if (fog > 0.0) {
+					if(length(u_player_loc - fogCenter) < radius) { //If the player is in the fog, then apply fog
+						color[i] = color[i] + fog * fogIntensity;
+					} else if (length(v_pos_world - fogCenter) < radius) { // if an object is in the fog, then apply fog
+						color[i] = color[i] + fog * fogIntensity;
+					} else if (determinant > 0.0) { //if the ray from the player to the frag intersects with the fog
+						if((tPlus < length(u_player_loc - v_pos_world) && tPlus > 0.0) || (tMinus < length(u_player_loc - v_pos_world) && tMinus > 0.0)) { //if the object is behind the fog
+							color[i] = color[i] + fog * fogIntensity;
+						}
+					}
+				}
+			}
+		}
+		
 		if (nonPhoto == 1) {
 			v = sqrt(color[0] + color[1] + color[2]);
 			v = pow(floor(v*5.0)/5.0, 2.0);
@@ -580,6 +618,10 @@ XXXXXXXXXXXXXXXXXXX
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
         gl.useProgram(program);
+		
+		var playerLocation = gl.getUniformLocation(program, "u_player_loc");
+		gl.uniform3f(playerLocation, player.loc[0], player.loc[1], player.loc[2]);
+		
         var xformP    = m4.perspective(player.fov * Math.PI / 180.0, gl.canvas.width / gl.canvas.height, player.clip[0], player.clip[1]);
         // note: lookAt returns the inverse of the view xform matrix, so we need to invert
         var xformVinv = m4.lookAt(player.loc, [player.loc[0]+Math.sin(player.dir), player.loc[1], player.loc[2]+Math.cos(player.dir)], [0,1,0]);
@@ -595,7 +637,8 @@ XXXXXXXXXXXXXXXXXXX
         }
 
 //AMOUNT OF AMBIENT LIGHT
-        gl.uniform4f(lightAmbLocation, 1.0, 1.0, 1.0, 0.5);
+        //gl.uniform4f(lightAmbLocation, 1.0, 1.0, 1.0, 0.5);
+        gl.uniform4f(lightAmbLocation, 1.0, 1.0, 1.0, 0.01);
 
         var torchNew = torch.range[0] + (torch.range[1] - torch.range[0]) * Math.random();
         torch.val = torch.val * torch.blend + torchNew * (1.0 - torch.blend);
