@@ -15,7 +15,7 @@ X  O           O  X
 X                 X
 X     O     O     X
 X                 X
-XX               XX
+XX  C    C   C  XX
 XL               LX
 XXXXXXXXXXXXXXXXXXX
 </script>
@@ -444,7 +444,7 @@ XXXXXXXXXXXXXXXXXXX
     var objectLight   = generateCylinderObject(8, [0.7,1.0,0.7,1.0], false, 0.2,  0.9, 1.0);
     var objectFloor   = generateQuadObject([0,0,0], [0.7,0.7,0.7,1.0], [1,0,0], [0,0,1], [0, 1,0], 1);
     var objectCeiling = generateQuadObject([0,0,0], [0.5,0.5,0.5,1.0], [-1,0,0], [0,0,1], [0,-1,0], 1);
-
+        var objectConeHD = generateConeObject(150,[0,1,0,1],false,.5,-1,1)
     ///////////////////////////
     // map stuff
     // x increases west-to-east, z increases north-to-south, and y increases floor-to-ceiling
@@ -460,6 +460,7 @@ XXXXXXXXXXXXXXXXXXX
         "O": objectTable,
         "o": objectTree,
         "L": objectLight,
+        "C": objectConeHD,
     };
     var typeToDirection = {
         "V": 0,
@@ -868,7 +869,87 @@ XXXXXXXXXXXXXXXXXXX
             length: 6,
         };
     }
-
+function generateConeObject(count, color, smooth, r, y0, y1) // r = radius of cone,  y0 = bottom, y1 = top
+    {  
+        var posBuffer   = gl.createBuffer(); // on graphics card, we will put data in them
+        var normBuffer  = gl.createBuffer();
+        var colorBuffer = gl.createBuffer();
+       
+        var p = []; //collecting position normal, color info
+        var n = [];
+        var c = [];
+           var angle = 360/count
+            var currentAngle = 0
+       
+        for(var i = 0; i < count; i++) // iterating through vertices
+        {
+        // -1 y value if on the ground
+                // y1 (0) = center
+           
+            var angleInRadians0 =  currentAngle * (Math.PI / 180.0) // angle should be in radians
+            var angleInRadians1 =  (currentAngle+angle) * (Math.PI / 180.0) // angle should be in radians
+               
+        var angleInRadiansN = (angleInRadians0 + angleInRadians1) / 2;
+            var x0 = Math.cos(angleInRadians0), z0 = Math.sin(angleInRadians0);
+            var x1 = Math.cos(angleInRadians1), z1 = Math.sin(angleInRadians1);
+            var xn = Math.cos(angleInRadians0), zn = Math.sin(angleInRadians0);
+           
+            var height = y1 -y0;
+            var phi = Math.atan2(height,r);
+            var psi = (Math.PI / 2.0)- phi;
+           
+            var normx = (Math.cos(psi)* Math.cos(angleInRadiansN));
+            var normy = Math.sin(psi);
+            var normz = (Math.cos(psi)*Math.sin(angleInRadiansN));
+       
+               
+        // side 1/2
+        //counterclock wise for the object to space us
+            p.push(x0*r, y0, z0*r);
+            if(smooth) n.push(x0,0,z0); else n.push(normx, normy, normz); // push data points on for normals
+            c.push(color[0], color[1], color[2], color[3]);
+           
+           
+           
+            p.push(0, y1, 0);
+            if(smooth) n.push(0,0,0); else n.push(normx,normy,normz);
+            c.push(color[0], color[1], color[2], color[3]);
+           
+            p.push(x1*r, y0, z1*r);
+            if(smooth) n.push(x1,0,z1); else n.push(normx,normy,normz);
+            c.push(color[0], color[1], color[2], color[3]);
+           
+ 
+            p.push(0, y0, 0);
+            n.push(0,-1,0);
+            c.push(color[0], color[1], color[2], color[3]);
+           
+             p.push(x0*r, y0, z0*r);
+            n.push(0,-1,0);
+            c.push(color[0], color[1], color[2], color[3]);
+           
+               p.push(x1*r, y0, z1*r);
+            n.push(0,-1,0);
+            c.push(color[0], color[1], color[2], color[3]);
+         
+             
+            currentAngle += angle;        
+        }
+       
+        gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(p), gl.STATIC_DRAW); // points get pushed into buffer
+        gl.bindBuffer(gl.ARRAY_BUFFER, normBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(n), gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(c), gl.STATIC_DRAW);
+       
+        return {
+            posBuffer: posBuffer,
+            normBuffer: normBuffer,
+            colorBuffer: colorBuffer,
+            length: p.length/3, //sent to graphic card, so the graphic card can render
+        };
+    }
     function generateCylinderObject(count, color, smooth, r, y0, y1)
     {
         var posBuffer   = gl.createBuffer();
