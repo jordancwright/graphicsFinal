@@ -30,6 +30,9 @@ XXXXXXXXXXXXXXXXXXX
     <tr><td>Use arrow keys to move.</td></tr>
     <tr><td>fps: <span id="fps">-----</span></td></tr>
     <tr><td><label for="chk">Enable Crosshair</label></td><td><input type="checkbox" id="enablecrosshair" name="chk"></td></tr>
+	<tr><td><label for="chk">Enable Fog</label></td><td><input type="checkbox" id="fog" name="chk"></td></tr>
+	<tr><td><label for="chk">Enable NPR</label></td><td><input type="checkbox" id="npr" name="chk"></td></tr>
+	<tr><td><label for="chk">Do NPR before Fog</label></td><td><input type="checkbox" id="nprBeforeFog" name="chk"></td></tr>
 </table></div>
 </body>
 
@@ -105,6 +108,9 @@ XXXXXXXXXXXXXXXXXXX
     uniform vec4 u_light_ambient;           // ambient color (rgb) and brightness (alpha)
     uniform vec4 u_light_torch;             // simulate player holding a torch
 	uniform vec3 u_player_loc;				// player position
+	uniform bool u_fog;						// fog enabled?
+	uniform bool u_npr;						// non-photorealistic rendering enabled?
+	uniform bool u_npr_before_fog;			// non-photorealistic rendering before fog?
 
     varying vec3 v_pos_world;   // vert position in world space
     varying vec3 v_pos_camera;  // vert position in camera space
@@ -150,7 +156,14 @@ XXXXXXXXXXXXXXXXXXX
 		float v;
         vec4 color = vec4(v_color.rgb * (kt + ka + kd), v_color.a);
 		
-		if(fog == 1) {
+		if (u_npr && u_npr_before_fog) {
+			v = sqrt(color[0] + color[1] + color[2]);
+			v = pow(floor(v*5.0)/5.0, 2.0);
+			color = normalize(color) * v;
+			color[3] = 1.0;
+		}
+		
+		if(u_fog) {
 			float radius = 20.0;
 			float fogIntensity = 0.2;
 			vec3 fogCenter = vec3(10.0, 0.0, 5.0);
@@ -178,7 +191,7 @@ XXXXXXXXXXXXXXXXXXX
 			}
 		}
 		
-		if (nonPhoto == 1) {
+		if (u_npr && !u_npr_before_fog) {
 			v = sqrt(color[0] + color[1] + color[2]);
 			v = pow(floor(v*5.0)/5.0, 2.0);
 			color = normalize(color) * v;
@@ -619,6 +632,13 @@ XXXXXXXXXXXXXXXXXXX
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
         gl.useProgram(program);
+		
+		var fog = gl.getUniformLocation(program, "u_fog");
+		gl.uniform1i(fog, document.getElementById("fog").checked);
+		var npr = gl.getUniformLocation(program, "u_npr");
+		gl.uniform1i(npr, document.getElementById("npr").checked);
+		var nprBeforeFog = gl.getUniformLocation(program, "u_npr_before_fog");
+		gl.uniform1i(nprBeforeFog, document.getElementById("nprBeforeFog").checked);
 		
 		var playerLocation = gl.getUniformLocation(program, "u_player_loc");
 		gl.uniform3f(playerLocation, player.loc[0], player.loc[1], player.loc[2]);
